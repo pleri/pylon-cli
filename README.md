@@ -82,6 +82,22 @@ by the service team.
 Contributions welcome — fork, branch, PR. The repo follows
 Conventional Commits; CI runs `pnpm build && pnpm test`.
 
+## Provenance + lineage
+
+Every published version carries an [npm provenance attestation](https://docs.npmjs.com/generating-provenance-statements) signed by Sigstore. To verify the bundle for a specific version:
+
+```bash
+# Fetch the attestation bundle from the npm registry:
+curl https://registry.npmjs.org/-/npm/v1/attestations/@pleri%2fpylon-cli@0.3.0
+
+# Or look up the sigstore transparency-log entry directly:
+# https://search.sigstore.dev/?logIndex=1390906936  (0.3.0)
+```
+
+`gh attestation verify` may return 404 against this package depending on which GitHub-side endpoint it queries. The npm registry attestation URL above is the canonical fallback — it returns the SLSA provenance bundle and the npm publish attestation as inline JSON.
+
+This package was previously published from a closed-source monorepo (`pleri/pylon`, internal). Versions `0.1.0`, `0.1.1`, `0.1.2` shipped from there without provenance. From `0.3.0` onwards, all releases come from this repo with provenance attestation; `0.2.x` was intentionally skipped to signal the boundary. See [ADR 006](docs/adr/006-schema-prepare.md) for the framing rationale.
+
 ## License
 
 [MIT](LICENSE) © Ernie Sim
