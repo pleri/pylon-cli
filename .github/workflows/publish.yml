@@ -74,6 +74,12 @@
 #   migration 2026-06-02; full removal 2026-09-16). Surfaced as a
 #   warning in run 24960198295 against @v4 versions; bumped before
 #   B3 to land the fix on the next publish.
+# - `actions/setup-node@v5+` defaults `package-manager-cache: true`
+#   for npm-managed projects, currently inert here because this repo
+#   is pnpm-managed (`packageManager: pnpm@10.8.1`). If anyone ever
+#   migrates to npm, the auto-cache will silently activate keyed on
+#   `package-lock.json` — surprising but not exploitable (CP3 audit
+#   adv-b2-002).
 # - Trusted Publisher replaces NPM_TOKEN entirely (no long-lived
 #   secret to leak / rotate / scope-down).
 #
@@ -124,21 +130,24 @@ jobs:
         with:
           node-version: 24
           registry-url: https://registry.npmjs.org
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm build
-      - run: pnpm test
       - name: Assert tag matches package.json version (adv-a5-001)
         # Belt-and-braces: even with the tight `v[0-9]*` pattern, this
         # guard catches the case where someone bumped package.json on
         # main without pushing a matching tag, then later pushed an
         # unrelated `v0.x.y` tag pointing at a HEAD whose package.json
-        # version doesn't match. Fails fast before npm publish.
+        # version doesn't match. Sequenced AFTER setup-node (so `node`
+        # is on PATH) and BEFORE pnpm install (fail fast — don't burn
+        # the 7s install+build+test cycle on a doomed publish; CP3 audit
+        # adv-b2-003).
         run: |
           PKG_VERSION="v$(node -p "require('./package.json').version")"
           if [ "$PKG_VERSION" != "${{ github.ref_name }}" ]; then
             echo "Tag ${{ github.ref_name }} does not match package.json version $PKG_VERSION"
             exit 1
           fi
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - run: pnpm test
       - name: Publish to npm (Trusted Publisher OIDC, no token)
         run: npm publish --access public
       - name: Create GitHub release with auto-generated notes
