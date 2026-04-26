@@ -37,18 +37,18 @@ After editing `reference.bare.yaml`, regenerate `reference.prepared.json`:
 
 ```bash
 cd <repo-root>
-pnpm --filter @pleri/pylon-cli build
+pnpm build
 PYLON_CLI_VERSION_OVERRIDE=0.0.0-test node -e "
   const fs = require('node:fs');
-  const { canonicalJson } = require('./packages/cli/dist/schema/canonical-json.js');
-  const { parseSource, validateBare, prefixAndSort } = require('./packages/cli/dist/schema/normalize.js');
-  const { attachMarker } = require('./packages/cli/dist/schema/marker.js');
-  const path = './packages/cli/src/schema/__fixtures__/reference.bare.yaml';
+  const { canonicalJson } = require('./dist/schema/canonical-json.js');
+  const { parseSource, validateBare, prefixAndSort } = require('./dist/schema/normalize.js');
+  const { attachMarker } = require('./dist/schema/marker.js');
+  const path = './src/schema/__fixtures__/reference.bare.yaml';
   const raw = fs.readFileSync(path, 'utf8');
   const prepared = attachMarker(prefixAndSort(validateBare(parseSource(raw, path), 'example'), 'example'), raw);
-  fs.writeFileSync('./packages/cli/src/schema/__fixtures__/reference.prepared.json', canonicalJson(prepared));
+  fs.writeFileSync('./src/schema/__fixtures__/reference.prepared.json', canonicalJson(prepared));
 "
-pnpm --filter @pleri/pylon-cli test -- fixtures
+pnpm test -- fixtures
 ```
 
 The final test run confirms the regenerated fixture matches every

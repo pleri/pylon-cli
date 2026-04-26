@@ -1,0 +1,16 @@
+# Default to LF line endings on checkout for all text files. Without this,
+# git's `core.autocrlf=true` (default on Windows) silently rewrites LF→CRLF
+# on checkout and CRLF→LF on commit. Fixtures whose `source_sha256` is
+# baked into a committed prepared artifact would silently mismatch on
+# Windows clones (carried from pylon-private's Phase A audit adv-001).
+* text=auto eol=lf
+
+# Belt-and-braces for the schema fixtures specifically: their byte-identity
+# is load-bearing for the marker's content_sha256 + source_sha256.
+src/schema/__fixtures__/*.yaml text eol=lf
+src/schema/__fixtures__/*.json text eol=lf
+
+# Binary file types that must NOT be LF-normalized. Add as needed.
+*.png binary
+*.jpg binary
+*.ico binary

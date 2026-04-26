@@ -5,7 +5,7 @@
  * Shape (per design doc + plan pass 2):
  *
  *   {
- *     cli_version:    string,   // semver from packages/cli/package.json
+ *     cli_version:    string,   // semver from package.json
  *     source_sha256:  string,   // sha256 of the raw source file bytes
  *     content_sha256: string,   // sha256 of canonicalJson(body without _prepared)
  *   }

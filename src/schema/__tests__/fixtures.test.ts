@@ -8,7 +8,7 @@
  * drift.
  *
  * To regenerate the fixture see
- * `packages/cli/src/schema/__fixtures__/README.md`.
+ * `src/schema/__fixtures__/README.md`.
  */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createHash } from 'node:crypto';
