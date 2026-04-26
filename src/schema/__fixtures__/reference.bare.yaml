@@ -1,0 +1,19 @@
+version_tag: "0.1.0"
+capabilities:
+  - name: world.read
+    description: Read worlds
+  - name: world.write
+    description: Modify worlds
+  - name: policy.set
+    description: Set archetype policies
+  - name: policy.read
+archetypes:
+  - name: viewer
+    description: Read-only access
+    capabilities: [world.read]
+  - name: user
+    capabilities: [world.read, world.write]
+  - name: admin
+    description: Full access
+    capabilities: [policy.set, policy.read]
+    inherits: [user]

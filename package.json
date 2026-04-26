@@ -1,0 +1,64 @@
+{
+  "name": "@pleri/pylon-cli",
+  "version": "0.3.0",
+  "private": false,
+  "description": "Pylon CLI — log in to your org's Pylon, manage apps and roles, query the audit log. The user-facing half of the @pleri/pylon RBAC service.",
+  "keywords": [
+    "pylon",
+    "rbac",
+    "authz",
+    "mcp",
+    "cli",
+    "pleri",
+    "olam"
+  ],
+  "homepage": "https://github.com/pleri/pylon-cli#readme",
+  "bugs": {
+    "url": "https://github.com/pleri/pylon-cli/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/pleri/pylon-cli.git"
+  },
+  "license": "MIT",
+  "author": "pleri",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "pylon": "dist/bin.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:ci": "vitest run --reporter=verbose",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "pnpm run build && pnpm run test:ci"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "dependencies": {
+    "@inquirer/prompts": "^5.0.0",
+    "@napi-rs/keyring": "^1.1.0",
+    "commander": "^12.0.0",
+    "open": "^10.0.0",
+    "yaml": "^2.7.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.7.0",
+    "vitest": "^3.0.0"
+  }
+}

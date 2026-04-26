@@ -1,0 +1,52 @@
+{
+  "_prepared": {
+    "cli_version": "0.0.0-test",
+    "content_sha256": "dda0341253d86626ef2bfaa921fc8eb84d5b788fc08ee24ca83bedb2e56ab7e2",
+    "source_sha256": "81a6125cd6a0945586ee09d2fbc286e08dce3272879e7d797f959a7718e56498"
+  },
+  "archetypes": [
+    {
+      "capabilities": [
+        "example:policy.read",
+        "example:policy.set"
+      ],
+      "description": "Full access",
+      "inherits": [
+        "example:user"
+      ],
+      "name": "example:admin"
+    },
+    {
+      "capabilities": [
+        "example:world.read",
+        "example:world.write"
+      ],
+      "name": "example:user"
+    },
+    {
+      "capabilities": [
+        "example:world.read"
+      ],
+      "description": "Read-only access",
+      "name": "example:viewer"
+    }
+  ],
+  "capabilities": [
+    {
+      "name": "example:policy.read"
+    },
+    {
+      "description": "Set archetype policies",
+      "name": "example:policy.set"
+    },
+    {
+      "description": "Read worlds",
+      "name": "example:world.read"
+    },
+    {
+      "description": "Modify worlds",
+      "name": "example:world.write"
+    }
+  ],
+  "version_tag": "0.1.0"
+}
