@@ -61,14 +61,19 @@
 # - `id-token: write` is JOB-scoped, not workflow-scoped, so a future
 #   second job in this file does NOT inherit OIDC mint capability
 #   without explicit opt-in.
-# - All three third-party actions below (pnpm/action-setup,
-#   actions/checkout, actions/setup-node) are pinned to `@v4` floating
-#   tags rather than SHAs. Accepted because the OIDC token's blast
-#   radius is one package + 5-minute TTL, and `actions/*` are
+# - All three third-party actions below (actions/checkout@v6,
+#   pnpm/action-setup@v5, actions/setup-node@v6) are pinned to floating
+#   major tags rather than SHAs. Accepted because the OIDC token's
+#   blast radius is one package + 5-minute TTL, and `actions/*` are
 #   GitHub-owned + `pnpm/action-setup` is high-trust. Re-evaluate if
 #   Trusted Publisher is wired to additional packages or if id-token
 #   federation is wired to anything beyond npm provenance — at that
 #   point pin all three to commit SHAs with Renovate updates.
+# - Major versions chosen to declare `using: node24` runtime,
+#   sidestepping the GitHub Actions Node 20 deprecation (forced
+#   migration 2026-06-02; full removal 2026-09-16). Surfaced as a
+#   warning in run 24960198295 against @v4 versions; bumped before
+#   B3 to land the fix on the next publish.
 # - Trusted Publisher replaces NPM_TOKEN entirely (no long-lived
 #   secret to leak / rotate / scope-down).
 #
@@ -111,11 +116,11 @@ jobs:
       contents: write       # required for `gh release create`
       id-token: write       # required for npm Trusted Publisher OIDC
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v5
         # pnpm version derived from package.json `packageManager`
         # field (`pnpm@10.8.1`) — single source of truth.
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: 24
           registry-url: https://registry.npmjs.org
