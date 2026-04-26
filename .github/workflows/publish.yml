@@ -1,0 +1,122 @@
+# Tag-triggered npm publish for @pleri/pylon-cli via npm Trusted Publisher.
+#
+# Fires when a tag matching `v*` is pushed to the repo (e.g. v0.3.0,
+# v0.3.1). The workflow builds + tests the CLI, publishes to npm using
+# the Trusted Publisher OIDC flow (no NPM_TOKEN secret — npm validates
+# the workflow's GitHub OIDC token directly), then creates a GitHub
+# release at the same tag with auto-generated notes.
+#
+# ─────────────────────────────────────────────────────────────────
+# CRITICAL: tag MUST point at a commit that contains THIS file.
+# ─────────────────────────────────────────────────────────────────
+# GitHub Actions resolves `push: tags: v*` workflows from the tree at
+# the tagged commit's SHA. A tag created BEFORE this file was committed
+# (or pointing at an ancestor of the merge commit) will silently no-op
+# — no Actions run, no publish, no error. Caught on pylon-private's
+# cli-v0.3.0 release (Phase D close audit adv-d5-001). After any PR
+# that touches this file merges, re-create the tag at the new main
+# HEAD:
+#
+#   git fetch origin
+#   git tag -d v<version>                     # delete stale local tag
+#   git ls-remote --tags origin v<version>    # check / clean remote
+#   git tag -a v<version> -m "pylon-cli v<version>" origin/main
+#   git push origin v<version>
+#
+# ─────────────────────────────────────────────────────────────────
+# One-time setup — npm Trusted Publisher
+# ─────────────────────────────────────────────────────────────────
+# https://docs.npmjs.com/trusted-publishers
+#
+#   1. Sign in to https://www.npmjs.com as a maintainer of
+#      @pleri/pylon-cli (the @pleri scope).
+#   2. Open the package's "Settings → Trusted Publishers" tab.
+#   3. Add a publisher:
+#        Publisher          : GitHub Actions
+#        Organization/User  : pleri
+#        Repository         : pylon-cli
+#        Workflow filename  : publish.yml
+#        Environment        : (leave blank)
+#   4. Save. No tokens, no rotation, no secrets to leak.
+#
+# That's it. The workflow's `id-token: write` permission below mints
+# a short-lived OIDC token on each tag push; npm validates it against
+# the Trusted Publisher config and authorises the publish.
+#
+# ─────────────────────────────────────────────────────────────────
+# Release flow
+# ─────────────────────────────────────────────────────────────────
+#   1. Bump `version` in package.json on a release branch.
+#   2. Update CHANGELOG.md.
+#   3. Merge to main.
+#   4. Tag the merged commit (per the CRITICAL block above):
+#        git tag -a v<version> -m "pylon-cli v<version>" origin/main
+#        git push origin v<version>
+#   5. CI publishes within ~3 min: provenance-signed npm publish +
+#      GitHub release at the same tag with auto-generated notes.
+#
+# ─────────────────────────────────────────────────────────────────
+# Security posture
+# ─────────────────────────────────────────────────────────────────
+# - `id-token: write` is JOB-scoped, not workflow-scoped, so a future
+#   second job in this file does NOT inherit OIDC mint capability
+#   without explicit opt-in.
+# - Third-party action `pnpm/action-setup` pinned to `@v4` floating
+#   tag rather than a SHA. Accepted because the OIDC token's blast
+#   radius is one package + 5-minute TTL, and pnpm/action-setup is
+#   high-trust. Re-evaluate if Trusted Publisher is wired to
+#   additional packages or if id-token federation is wired to
+#   anything beyond npm provenance.
+# - Trusted Publisher replaces NPM_TOKEN entirely (no long-lived
+#   secret to leak / rotate / scope-down).
+#
+# ─────────────────────────────────────────────────────────────────
+# Carries forward fixes from pylon-private:
+# ─────────────────────────────────────────────────────────────────
+# - PR #5: dropped `with: version: 10` from pnpm/action-setup. The
+#   `packageManager` field in package.json (`pnpm@10.8.1`) is the
+#   single source of truth; setting both fails with
+#   ERR_PNPM_BAD_PM_VERSION.
+# - PR #6: bumped to Node 24 (current LTS, ships npm 11.x with
+#   Trusted Publisher OIDC support built-in). Dropped the
+#   `npm install -g npm@latest` step that was hitting a known
+#   self-upgrade bug (MODULE_NOT_FOUND: promise-retry during
+#   arborist rebuild).
+
+name: Publish
+
+on:
+  push:
+    tags:
+      - "v*"
+
+# Prevent two concurrent publishes from the same tag-namespace
+# trampling each other (rare but ugly when it happens).
+concurrency:
+  group: publish
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write       # required for `gh release create`
+      id-token: write       # required for npm Trusted Publisher OIDC
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        # pnpm version derived from package.json `packageManager`
+        # field (`pnpm@10.8.1`) — single source of truth.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - run: pnpm test
+      - name: Publish to npm (Trusted Publisher OIDC, no token)
+        run: npm publish --access public
+      - name: Create GitHub release with auto-generated notes
+        run: gh release create "${{ github.ref_name }}" --title "pylon-cli ${{ github.ref_name }}" --generate-notes
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
