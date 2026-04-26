@@ -5,7 +5,7 @@
 **Deciders:** CTO
 **Supersedes:** none
 **Superseded by:** none
-**Related:** [ADR 001](./001-pylon-as-service.md), [ADR 002](./002-token-storage-and-sharing.md)
+**Related:** ADRs 001 ("Pylon as a service") and 002 ("token storage and sharing") live in the closed-source Pylon service repo and aren't reproduced here; the relevant context is summarized inline below.
 
 ## Context
 

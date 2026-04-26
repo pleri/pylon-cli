@@ -10,14 +10,22 @@ performance / simplicity audits, 2026-04-23).
 
 > **Note on package availability.** This doc lives in `pleri/pylon-cli`
 > because it's the canonical wire-contract reference for any consumer
-> talking to a Pylon service. The `@pleri/pylon` *runtime SDK package*
-> referenced throughout (used by Workers MCPs at request-handling time)
-> is currently a closed implementation — sections §4–§5 describe its
-> intended public surface but the package is not yet published. The
-> CLI in this repo (`@pleri/pylon-cli`) is a reference implementation
-> of the wire contract in §2–§3 and is the public-readable side of the
-> integration today. Where the doc says "the SDK does X", treat it as
-> a contract you can build against, not a `npm install`-able package.
+> talking to a Pylon service. Three packages are referenced throughout:
+>
+> - **`@pleri/pylon-cli`** — published, public, this repo. The CLI in
+>   §3.5+ that admins/operators install via `npm install -g`.
+> - **`@pleri/pylon`** — the runtime SDK package (§4–§5) that Workers
+>   MCPs would import at request-handling time. **Not yet published**;
+>   currently a closed implementation. Sections §4–§5 describe its
+>   intended public surface as a contract you can build against, not
+>   an `npm install`-able package.
+> - **`@pleri/pylon-core`** — type substrate (`Capability`, `Archetype`,
+>   `Actor`, error classes) imported by both `@pleri/pylon` and the
+>   service. Also **not yet published**; same status as `@pleri/pylon`.
+>
+> Where the doc shows `npm install @pleri/pylon[-core]` or `import …
+> from '@pleri/pylon[-core]'`, treat it as forward-looking documentation
+> of the contract until the packages publish.
 
 ---
 
@@ -67,6 +75,8 @@ Read this doc top-to-bottom once; after that, `§2.1` (surface) and
 ## 1. Installation
 
 ```bash
+# NOTE: @pleri/pylon is not yet published — see header note above.
+# Snippet documents the intended install once the package ships.
 pnpm add @pleri/pylon
 # or
 npm install @pleri/pylon

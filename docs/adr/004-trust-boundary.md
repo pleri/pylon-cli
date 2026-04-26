@@ -3,7 +3,7 @@
 **Date:** 2026-04-23
 **Status:** accepted
 **Deciders:** CTO
-**Related:** [ADR 001](./001-pylon-as-service.md), [ADR 002](./002-token-storage-and-sharing.md), [ADR 003](./003-cli-login-state-machine.md)
+**Related:** [ADR 003](./003-cli-login-state-machine.md). ADRs 001 ("Pylon as a service") and 002 ("token storage and sharing") live in the closed-source Pylon service repo.
 
 ## Context
 
@@ -210,8 +210,7 @@ anyway.
 - **`orgId` change = new Pylon deployment.** No renaming
   operation. Accepted as an operational constraint.
 - **Cache mismatch is a sharp edge.** User who repurposes a URL
-  must run `pylon forget`. Documented in `SETUP_USER.md`
-  troubleshooting; better than silent cross-org drift.
+  must run `pylon forget`. Better than silent cross-org drift.
 
 ## Implementation hooks
 
@@ -231,6 +230,9 @@ pillar-4 gap today). Service and SDK changes wait for their own PRs.
 
 ## Status tracking
 
-- ADR 005 (pending): signing key rotation + `kid` header
-  semantics.
-- ADR 006 (pending): break-glass admin + its audit trail.
+- ADR 005 (deferred): signing key rotation + `kid` header
+  semantics. Slot reserved; lives in the closed-source service
+  repo if/when accepted.
+- ADR 006 (accepted, in this repo): split `pylon schema push` into
+  `prepare` + `push` — a CLI UX + provenance feature, not a
+  protocol-level boundary. See [`./006-schema-prepare.md`](./006-schema-prepare.md).

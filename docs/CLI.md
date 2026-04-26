@@ -5,18 +5,25 @@ the narrative version with worked examples.
 
 ## Install
 
-See [`SETUP_USER.md`](./SETUP_USER.md) Step 1 for first-time install.
-After `pnpm install && pnpm -r build` at the repo root, the CLI is
-reachable via:
+The CLI is published as `@pleri/pylon-cli` on npm:
 
 ```bash
-pnpm pylon <command>            # from repo root
+npm install -g @pleri/pylon-cli
+pylon --version
 ```
 
-or, after `pnpm --filter @pleri/pylon-cli link --global`:
+Or one-shot via `npx`:
 
 ```bash
-pylon <command>                 # anywhere
+npx -p @pleri/pylon-cli pylon <command>
+```
+
+For local development from this repo (after cloning):
+
+```bash
+pnpm install
+pnpm build
+pnpm exec pylon <command>       # invokes dist/bin.js
 ```
 
 Every example below uses the bare `pylon` form.
