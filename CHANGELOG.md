@@ -57,8 +57,8 @@ Operator docs: [`docs/CLI.md`](./docs/CLI.md) · [`docs/PYLON_SDK_CONTRACT.md`](
   markerless pushes continue to work (see ADR 006 for the framing
   rationale).
 - **`.gitattributes`** at repo root pins LF line endings for fixtures
-  + a workspace-wide `* text=auto eol=lf` default. Without this,
-  Windows clones with `core.autocrlf=true` would silently break the
+  + a repo-wide `* text=auto eol=lf` default. Without this, Windows
+  clones with `core.autocrlf=true` would silently break the
   byte-identity contract at the git layer.
 
 ### Migration (existing CLI consumers)
@@ -125,11 +125,11 @@ service-side migration is required for older CLI clients:
 
 ### Notes (post-publish-from-pylon-cli)
 
-- **Copyright holder updated to `Ernie Sim`** (was: `ein-sof`)
-  following the public-repo split. Same MIT license terms; only the
-  attribution line in `LICENSE` changes between versions. This is the
-  pylon-cli repo's first publish; the next published version will
-  reflect the new attribution.
+- **Copyright holder is `Ernie Sim`.** The previous `0.2.x` line was
+  published from the pylon workspace and listed `ein-sof` in
+  `LICENSE`. This `0.3.0` release — the first published from
+  `pleri/pylon-cli` — carries the new attribution. Same MIT license
+  terms; only the `LICENSE` attribution line differs.
 
 [Unreleased]: https://github.com/pleri/pylon-cli/compare/v0.3.0...HEAD
 [0.3.0]: https://github.com/pleri/pylon-cli/releases/tag/v0.3.0

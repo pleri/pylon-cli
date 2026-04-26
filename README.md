@@ -17,6 +17,7 @@ pylon --version
 Or one-shot via `npx`:
 
 ```bash
+# Replace the URL with your org's actual Pylon endpoint:
 npx -p @pleri/pylon-cli pylon login --org-url=https://pylon.example.com
 ```
 
@@ -33,7 +34,7 @@ pnpm exec pylon <command>
 
 ```bash
 # 1. Log in to your org's Pylon (device-code flow):
-pylon login --org-url=https://pylon.example.com
+pylon login --org-url=https://pylon.example.com   # ← replace with your org's URL
 # → opens a browser tab; enter the one-time code; press enter.
 
 # 2. Confirm:
@@ -61,13 +62,15 @@ The full command reference is in [`docs/CLI.md`](docs/CLI.md).
 ## Releases
 
 Releases are tagged with `v<semver>` (e.g. `v0.3.0`, `v0.3.1`,
-`v0.4.0`). Pushing a tag triggers
-[`.github/workflows/publish.yml`](.github/workflows/publish.yml) which
-publishes to npm via the [Trusted Publisher OIDC flow](https://docs.npmjs.com/trusted-publishers)
-— provenance attestation visible on the npm package page.
+`v0.4.0`). Pushing a tag triggers the publish workflow at
+`.github/workflows/publish.yml`, which publishes to npm via the
+[Trusted Publisher OIDC flow](https://docs.npmjs.com/trusted-publishers) —
+provenance attestation visible on the npm package page.
 
-The maintainer's release procedure is in `CHANGELOG.md` (see the
-release checklist in the upcoming `docs/PUBLISHING.md`).
+The maintainer's release procedure is documented in `CHANGELOG.md`
+above each version's entry; the runbook is to bump `version` in
+`package.json`, update `CHANGELOG.md`, merge to `main`, then tag
+`v<semver>` at the merge commit and push the tag.
 
 ## Issues + contributions
 

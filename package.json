@@ -21,7 +21,11 @@
     "url": "git+https://github.com/pleri/pylon-cli.git"
   },
   "license": "MIT",
-  "author": "pleri",
+  "author": {
+    "name": "Ernie Sim",
+    "email": "ernest.codes@gmail.com",
+    "url": "https://github.com/pleri"
+  },
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
