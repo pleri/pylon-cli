@@ -61,12 +61,14 @@
 # - `id-token: write` is JOB-scoped, not workflow-scoped, so a future
 #   second job in this file does NOT inherit OIDC mint capability
 #   without explicit opt-in.
-# - Third-party action `pnpm/action-setup` pinned to `@v4` floating
-#   tag rather than a SHA. Accepted because the OIDC token's blast
-#   radius is one package + 5-minute TTL, and pnpm/action-setup is
-#   high-trust. Re-evaluate if Trusted Publisher is wired to
-#   additional packages or if id-token federation is wired to
-#   anything beyond npm provenance.
+# - All three third-party actions below (pnpm/action-setup,
+#   actions/checkout, actions/setup-node) are pinned to `@v4` floating
+#   tags rather than SHAs. Accepted because the OIDC token's blast
+#   radius is one package + 5-minute TTL, and `actions/*` are
+#   GitHub-owned + `pnpm/action-setup` is high-trust. Re-evaluate if
+#   Trusted Publisher is wired to additional packages or if id-token
+#   federation is wired to anything beyond npm provenance — at that
+#   point pin all three to commit SHAs with Renovate updates.
 # - Trusted Publisher replaces NPM_TOKEN entirely (no long-lived
 #   secret to leak / rotate / scope-down).
 #
@@ -88,12 +90,18 @@ name: Publish
 on:
   push:
     tags:
-      - "v*"
+      # Tight pattern — only semver-shaped tags trigger a publish. Without
+      # the leading `[0-9]` constraint, `v*` would also match typo tags
+      # like `v-rc1` or `v-experimental` and trigger a real publish at
+      # whatever version sits in package.json. (CP3 audit adv-a5-001.)
+      - "v[0-9]*"
 
-# Prevent two concurrent publishes from the same tag-namespace
-# trampling each other (rare but ugly when it happens).
+# Prevent two concurrent npm publishes from the same tag-namespace
+# trampling each other. Group is `publish-npm` (not generic `publish`)
+# so a future docs-deploy or container-publish workflow can have its
+# own concurrency lane without serializing against this one.
 concurrency:
-  group: publish
+  group: publish-npm
   cancel-in-progress: false
 
 jobs:
@@ -114,6 +122,18 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
       - run: pnpm test
+      - name: Assert tag matches package.json version (adv-a5-001)
+        # Belt-and-braces: even with the tight `v[0-9]*` pattern, this
+        # guard catches the case where someone bumped package.json on
+        # main without pushing a matching tag, then later pushed an
+        # unrelated `v0.x.y` tag pointing at a HEAD whose package.json
+        # version doesn't match. Fails fast before npm publish.
+        run: |
+          PKG_VERSION="v$(node -p "require('./package.json').version")"
+          if [ "$PKG_VERSION" != "${{ github.ref_name }}" ]; then
+            echo "Tag ${{ github.ref_name }} does not match package.json version $PKG_VERSION"
+            exit 1
+          fi
       - name: Publish to npm (Trusted Publisher OIDC, no token)
         run: npm publish --access public
       - name: Create GitHub release with auto-generated notes
