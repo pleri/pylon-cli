@@ -1,4 +1,31 @@
 node_modules/
 dist/
-.DS_Store
+.turbo/
+*.tsbuildinfo
+coverage/
+
+# CF worker local dev (carried from pylon-private; some CLI debugging stages
+# spin a local Pylon worker via .dev.vars, so this dotfile must never land
+# in a public repo)
+.wrangler/
+.dev.vars
+
+# Env
+.env
+.env.local
+.env.*.local
+
+# Logs
 *.log
+
+# npm pack output
+*.tgz
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editors
+.vscode/
+.idea/
+*.swp
