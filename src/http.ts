@@ -102,12 +102,20 @@ interface RequestContext {
 }
 
 /**
- * Canonical list of paths that MUST be exempt from CF Access for the
- * CLI to function. Mirrors `pylon/docs/SETUP_ADMIN.md` step 9. Kept
- * here as a constant so the error message stays in sync if the
- * platform docs change.
+ * Canonical doc that explains which Pylon paths belong to which
+ * route class (public, Pylon-authenticated, browser-gated) and
+ * which need CF Access at the edge to step out of the way. Errors
+ * point here so the inline message can stay short.
  */
-const PYLON_PUBLIC_PATHS = [
+const ROUTES_DOC_URL =
+  'https://github.com/pleri/pylon-cli/blob/main/docs/ROUTES.md';
+
+/**
+ * Paths the CLI calls before any credential exists. Used only to
+ * label the route class in error output — the canonical, drift-free
+ * list is in docs/ROUTES.md.
+ */
+const PUBLIC_PATHS = [
   '/discover',
   '/device/init',
   '/device/poll',
@@ -115,6 +123,12 @@ const PYLON_PUBLIC_PATHS = [
   '/health',
   '/ready',
 ] as const;
+
+function classifyPath(path: string): 'A (public)' | 'B (Pylon-authenticated)' {
+  return (PUBLIC_PATHS as readonly string[]).includes(path)
+    ? 'A (public)'
+    : 'B (Pylon-authenticated)';
+}
 
 async function jsonOrThrow<T>(res: Response, ctx: RequestContext): Promise<T> {
   // A gateway (Cloudflare Access, generic SSO proxy, corporate VPN
@@ -127,18 +141,10 @@ async function jsonOrThrow<T>(res: Response, ctx: RequestContext): Promise<T> {
   // message. All JSON endpoints below pass `redirect: 'manual'`.
   if (res.type === 'opaqueredirect' || (res.status >= 300 && res.status < 400)) {
     const location = res.headers.get('location') ?? '(no Location header)';
-    const isPublicPath = (PYLON_PUBLIC_PATHS as readonly string[]).includes(ctx.path);
-    const remediation = isPublicPath
-      ? `${ctx.path} MUST be on the CF Access exempt list — the CLI calls it before any session JWT exists. ` +
-        `Add it under Zero Trust → Access → Applications → your Pylon app → policy → exempt paths. ` +
-        `Full required exempt list: ${PYLON_PUBLIC_PATHS.join(', ')}.`
-      : `${ctx.path} is normally authenticated by Bearer session JWT, not CF Access. ` +
-        `If your CF Access policy covers this path, the CLI's Bearer header is ignored and the request is ` +
-        `redirected to SSO. Either narrow the CF Access policy to exclude this path, or use a CF Access ` +
-        `service token (CF-Access-Client-Id / CF-Access-Client-Secret) — the CLI does not yet support service tokens.`;
     throw new PylonHttpError(
       `gateway intercept on ${ctx.method} ${ctx.path} → HTTP ${res.status} (Location: ${sanitizeServerMessage(location, 256)}). ` +
-        remediation,
+        `${ctx.path} is route class ${classifyPath(ctx.path)} and must be exempt from CF Access at the edge. ` +
+        `See ${ROUTES_DOC_URL} for the full route matrix and CF Access configuration recipes.`,
       res.status,
     );
   }
@@ -152,8 +158,8 @@ async function jsonOrThrow<T>(res: Response, ctx: RequestContext): Promise<T> {
       const reason = err instanceof Error ? err.message : String(err);
       throw new PylonHttpError(
         `non-JSON response from ${ctx.method} ${ctx.path} (${sanitizeServerMessage(reason, 128)}). ` +
-          `A gateway may be returning an HTML page instead of forwarding to Pylon — ` +
-          `check that your Cloudflare Access / SSO policy bypasses ${ctx.path}.`,
+          `A gateway is likely returning an HTML page instead of forwarding to Pylon. ` +
+          `See ${ROUTES_DOC_URL} for which paths must be exempt from CF Access.`,
         res.status,
       );
     }
@@ -250,8 +256,8 @@ export async function discover(orgUrl: string): Promise<DiscoverResponse> {
     throw new DiscoveryError(
       base,
       `GET /discover redirected (HTTP ${res.status} → ${sanitizeServerMessage(location, 256)}). ` +
-        `/discover MUST be on the CF Access exempt list — it has no auth header to forward. ` +
-        `Add it under Zero Trust → Access → Applications → your Pylon app → policy → exempt paths.`,
+        `/discover is route class A (public) and must be exempt from CF Access at the edge. ` +
+        `See ${ROUTES_DOC_URL} for the full route matrix and CF Access configuration recipes.`,
     );
   }
   if (!res.ok) {

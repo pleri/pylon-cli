@@ -124,12 +124,11 @@ describe('discover', () => {
   });
 
   // ── redirect defence ────────────────────────────────────────
-  it('refuses to follow a 3xx from /discover and names the path + remediation', async () => {
-    // Cross-origin redirect to attacker: fetch with redirect:manual
-    // returns the redirect status directly, we must refuse. The
-    // error message must name the path (so the operator knows what
-    // to add to their CF Access exempt list) and the Location (so
-    // they can confirm whether it's CF Access or something else).
+  it('refuses to follow a 3xx from /discover and points at the routes doc', async () => {
+    // Cross-origin redirect: fetch with redirect:manual returns the
+    // redirect status directly, we must refuse. The error must name
+    // the path, the Location (so the operator can confirm it's CF
+    // Access) and point at docs/ROUTES.md.
     setFetchImpl(async () =>
       new Response(null, {
         status: 302,
@@ -140,7 +139,8 @@ describe('discover', () => {
       (err: unknown) =>
         err instanceof DiscoveryError &&
         /GET \/discover/.test(err.message) &&
-        /CF Access exempt list/.test(err.message) &&
+        /route class A \(public\)/.test(err.message) &&
+        /docs\/ROUTES\.md/.test(err.message) &&
         /idp\.cloudflareaccess\.com/.test(err.message),
     );
   });
@@ -225,12 +225,12 @@ describe('devicePoll', () => {
     expect(capturedInit?.redirect).toBe('manual');
   });
 
-  it('gives a gateway-intercept error when CF Access returns 302 to SSO', async () => {
-    // Reproduces the real "Unexpected token '<'" CLI crash: a
-    // Cloudflare Access policy gates /device/poll and answers with
-    // a 302 to the identity provider. Without manual redirects the
-    // client would follow to an HTML login page; with them we see
-    // the 3xx and raise a targeted error pointing at the policy.
+  it('gives a gateway-intercept error naming the path, class, and routes doc', async () => {
+    // Reproduces the real "Unexpected token '<'" CLI crash: a CF
+    // Access policy gates /device/poll and answers with a 302 to
+    // the identity provider. With manual redirects we see the 3xx
+    // and raise a targeted error naming the exact endpoint and
+    // pointing at docs/ROUTES.md for the route-class matrix.
     setFetchImpl(
       async () =>
         new Response(null, {
@@ -243,19 +243,20 @@ describe('devicePoll', () => {
         err instanceof PylonHttpError &&
         err.status === 302 &&
         /gateway intercept/i.test(err.message) &&
-        // Names the exact endpoint that 302'd, so the operator can
-        // go fix their CF Access exempt list precisely.
+        // Names the exact endpoint that 302'd.
         /GET \/device\/poll/.test(err.message) &&
-        // Names CF Access (canonical term in pylon docs).
-        /CF Access/.test(err.message) &&
-        // Surfaces the canonical exempt list as remediation.
-        /\/device\/init/.test(err.message),
+        // Labels the route class so the operator knows which
+        // section of ROUTES.md to read.
+        /route class A \(public\)/.test(err.message) &&
+        // Points at the canonical doc rather than inlining a wall
+        // of remediation prose.
+        /docs\/ROUTES\.md/.test(err.message),
     );
   });
 
-  it('gives a gateway-intercept error when the body is HTML not JSON', async () => {
-    // A gateway can also swallow the request and return an HTML
-    // login page with 200. Same actionable message.
+  it('non-JSON response also points at the routes doc', async () => {
+    // A gateway can swallow the request and return an HTML login
+    // page with 200 instead of 3xx. Same actionable pointer.
     setFetchImpl(
       async () =>
         new Response('<!DOCTYPE html><html><body>Login</body></html>', {
@@ -269,16 +270,16 @@ describe('devicePoll', () => {
         err.status === 200 &&
         /non-JSON response/i.test(err.message) &&
         /GET \/device\/poll/.test(err.message) &&
-        /Cloudflare Access/.test(err.message),
+        /docs\/ROUTES\.md/.test(err.message),
     );
   });
 
-  it('different-tier remediation for non-public paths', async () => {
-    // /whoami is auth'd by Bearer JWT, not CF Access. If it 302's,
-    // the operator's CF Access policy is over-broad — different fix
-    // than the public-path case. The error message must reflect
-    // that distinction so they don't naively add /whoami to the
-    // exempt list (which would defeat the auth model).
+  it('classifies Bearer-auth paths as class B (Pylon-authenticated)', async () => {
+    // /whoami is auth'd by Bearer session JWT, not CF Access.
+    // Class B paths still need to be exempt at the edge — Pylon
+    // validates the JWT internally — so the remediation is the
+    // same shape as class A, but the class label tells the operator
+    // why (and prevents them from concluding "this should be public").
     setFetchImpl(
       async () =>
         new Response(null, {
@@ -291,10 +292,8 @@ describe('devicePoll', () => {
         err instanceof PylonHttpError &&
         err.status === 302 &&
         /GET \/whoami/.test(err.message) &&
-        // Names the right remediation: narrow the policy, not
-        // exempt-list it.
-        /Bearer session JWT/.test(err.message) &&
-        /narrow the CF Access policy/.test(err.message),
+        /route class B \(Pylon-authenticated\)/.test(err.message) &&
+        /docs\/ROUTES\.md/.test(err.message),
     );
   });
 });

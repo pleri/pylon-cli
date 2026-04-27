@@ -223,6 +223,7 @@ exit code — is in [`docs/CLI.md`](docs/CLI.md).
 | Doc | What's in it |
 |---|---|
 | [`docs/CLI.md`](docs/CLI.md) | Command reference, exit codes, worked examples |
+| [`docs/ROUTES.md`](docs/ROUTES.md) | Per-endpoint route classes (public / Pylon-authenticated / browser-gated), CF Access configuration recipes, gateway-intercept troubleshooting |
 | [`docs/PYLON_SDK_CONTRACT.md`](docs/PYLON_SDK_CONTRACT.md) | Wire-level contract this CLI implements (HTTP/JSON shapes, auth flow, schema push semantics) |
 | [`docs/adr/003-cli-login-state-machine.md`](docs/adr/003-cli-login-state-machine.md) | Device-code login state machine, identity primacy, library choices |
 | [`docs/adr/004-trust-boundary.md`](docs/adr/004-trust-boundary.md) | Trust boundary for `orgId`; cache-vs-discovery resolution; `pylon forget` recovery path |
