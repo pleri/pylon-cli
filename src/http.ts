@@ -81,7 +81,42 @@ export function sanitizeServerMessage(s: string, maxLen = 512): string {
   return stripped.length > maxLen ? stripped.slice(0, maxLen) + '...' : stripped;
 }
 
-async function jsonOrThrow<T>(res: Response): Promise<T> {
+/**
+ * Identifies the request that produced a response, so error messages
+ * can name the exact endpoint that failed (instead of "an endpoint").
+ *
+ * This is the difference between an actionable error ("`POST
+ * /device/poll` was intercepted by CF Access — add it to the exempt
+ * list") and a cryptic one ("an endpoint that should be public was
+ * intercepted").
+ */
+interface RequestContext {
+  readonly method: string;
+  /**
+   * The Pylon path (e.g. `/device/poll`, `/apps/:appId/schema`).
+   * Path templates use `:param` placeholders rather than concrete
+   * values, since CF Access exempt rules use glob patterns and
+   * concrete IDs would mislead the operator about what to bypass.
+   */
+  readonly path: string;
+}
+
+/**
+ * Canonical list of paths that MUST be exempt from CF Access for the
+ * CLI to function. Mirrors `pylon/docs/SETUP_ADMIN.md` step 9. Kept
+ * here as a constant so the error message stays in sync if the
+ * platform docs change.
+ */
+const PYLON_PUBLIC_PATHS = [
+  '/discover',
+  '/device/init',
+  '/device/poll',
+  '/.well-known/pylon-keys',
+  '/health',
+  '/ready',
+] as const;
+
+async function jsonOrThrow<T>(res: Response, ctx: RequestContext): Promise<T> {
   // A gateway (Cloudflare Access, generic SSO proxy, corporate VPN
   // interceptor) sitting in front of Pylon can answer with an HTML
   // login page and either a 200 or a 3xx. Without `redirect:
@@ -92,10 +127,18 @@ async function jsonOrThrow<T>(res: Response): Promise<T> {
   // message. All JSON endpoints below pass `redirect: 'manual'`.
   if (res.type === 'opaqueredirect' || (res.status >= 300 && res.status < 400)) {
     const location = res.headers.get('location') ?? '(no Location header)';
+    const isPublicPath = (PYLON_PUBLIC_PATHS as readonly string[]).includes(ctx.path);
+    const remediation = isPublicPath
+      ? `${ctx.path} MUST be on the CF Access exempt list — the CLI calls it before any session JWT exists. ` +
+        `Add it under Zero Trust → Access → Applications → your Pylon app → policy → exempt paths. ` +
+        `Full required exempt list: ${PYLON_PUBLIC_PATHS.join(', ')}.`
+      : `${ctx.path} is normally authenticated by Bearer session JWT, not CF Access. ` +
+        `If your CF Access policy covers this path, the CLI's Bearer header is ignored and the request is ` +
+        `redirected to SSO. Either narrow the CF Access policy to exclude this path, or use a CF Access ` +
+        `service token (CF-Access-Client-Id / CF-Access-Client-Secret) — the CLI does not yet support service tokens.`;
     throw new PylonHttpError(
-      `gateway intercept: endpoint redirected (HTTP ${res.status} → ${sanitizeServerMessage(location, 256)}). ` +
-        `A Cloudflare Access / SSO proxy is protecting a Pylon endpoint that should be public ` +
-        `(e.g. /device/init, /device/poll). Fix the CF Access policy to bypass these paths.`,
+      `gateway intercept on ${ctx.method} ${ctx.path} → HTTP ${res.status} (Location: ${sanitizeServerMessage(location, 256)}). ` +
+        remediation,
       res.status,
     );
   }
@@ -108,9 +151,9 @@ async function jsonOrThrow<T>(res: Response): Promise<T> {
       // 3xx. Give the same actionable error.
       const reason = err instanceof Error ? err.message : String(err);
       throw new PylonHttpError(
-        `non-JSON response from Pylon (${sanitizeServerMessage(reason, 128)}). ` +
+        `non-JSON response from ${ctx.method} ${ctx.path} (${sanitizeServerMessage(reason, 128)}). ` +
           `A gateway may be returning an HTML page instead of forwarding to Pylon — ` +
-          `check that your Cloudflare Access / SSO policy bypasses this endpoint.`,
+          `check that your Cloudflare Access / SSO policy bypasses ${ctx.path}.`,
         res.status,
       );
     }
@@ -122,7 +165,7 @@ async function jsonOrThrow<T>(res: Response): Promise<T> {
   } catch {
     // non-json body; keep statusText
   }
-  throw new PylonHttpError(sanitizeServerMessage(message), res.status);
+  throw new PylonHttpError(`${ctx.method} ${ctx.path} → ${sanitizeServerMessage(message)}`, res.status);
 }
 
 function normaliseBaseUrl(url: string): string {
@@ -203,10 +246,16 @@ export async function discover(orgUrl: string): Promise<DiscoverResponse> {
   // Node's undici with manual. Either way we refuse — a legitimate
   // Pylon doesn't redirect /discover.
   if (res.type === 'opaqueredirect' || (res.status >= 300 && res.status < 400)) {
-    throw new DiscoveryError(base, `refusing to follow redirect from /discover (status ${res.status})`);
+    const location = res.headers.get('location') ?? '(no Location header)';
+    throw new DiscoveryError(
+      base,
+      `GET /discover redirected (HTTP ${res.status} → ${sanitizeServerMessage(location, 256)}). ` +
+        `/discover MUST be on the CF Access exempt list — it has no auth header to forward. ` +
+        `Add it under Zero Trust → Access → Applications → your Pylon app → policy → exempt paths.`,
+    );
   }
   if (!res.ok) {
-    throw new DiscoveryError(base, `HTTP ${res.status}`);
+    throw new DiscoveryError(base, `GET /discover → HTTP ${res.status}`);
   }
   const raw = await res.json();
   return validateDiscoverResponse(raw, base);
@@ -223,7 +272,7 @@ export async function deviceInit(
     body: JSON.stringify(args),
     redirect: 'manual',
   });
-  return jsonOrThrow<DeviceInitResponse>(res);
+  return jsonOrThrow<DeviceInitResponse>(res, { method: 'POST', path: '/device/init' });
 }
 
 export async function devicePoll(
@@ -235,7 +284,7 @@ export async function devicePoll(
     method: 'GET',
     redirect: 'manual',
   });
-  return jsonOrThrow<DevicePollResponse>(res);
+  return jsonOrThrow<DevicePollResponse>(res, { method: 'GET', path: '/device/poll' });
 }
 
 export async function whoami(
@@ -248,7 +297,7 @@ export async function whoami(
     headers: { Authorization: `Bearer ${sessionJwt}` },
     redirect: 'manual',
   });
-  return jsonOrThrow<WhoamiResponse>(res);
+  return jsonOrThrow<WhoamiResponse>(res, { method: 'GET', path: '/whoami' });
 }
 
 export async function appRegister(
@@ -266,7 +315,7 @@ export async function appRegister(
     body: JSON.stringify(args),
     redirect: 'manual',
   });
-  return jsonOrThrow<AppRegisterResponse>(res);
+  return jsonOrThrow<AppRegisterResponse>(res, { method: 'POST', path: '/apps' });
 }
 
 export async function roleGrant(
@@ -289,7 +338,7 @@ export async function roleGrant(
     body: JSON.stringify(args),
     redirect: 'manual',
   });
-  return jsonOrThrow<RoleGrantResponse>(res);
+  return jsonOrThrow<RoleGrantResponse>(res, { method: 'POST', path: '/roles' });
 }
 
 // ── Listings + delete + audit ─────────────────────────────────────
@@ -314,7 +363,7 @@ export async function roleList(
     headers: { Authorization: `Bearer ${sessionJwt}` },
     redirect: 'manual',
   });
-  return jsonOrThrow<{ roles: RoleListItem[] }>(res);
+  return jsonOrThrow<{ roles: RoleListItem[] }>(res, { method: 'GET', path: '/roles' });
 }
 
 export async function roleRevoke(
@@ -332,7 +381,10 @@ export async function roleRevoke(
       redirect: 'manual',
     },
   );
-  return jsonOrThrow<{ app_id: string; email_hash: string; revoked: boolean }>(res);
+  return jsonOrThrow<{ app_id: string; email_hash: string; revoked: boolean }>(res, {
+    method: 'DELETE',
+    path: '/roles/:appId/:emailHash',
+  });
 }
 
 export interface AppListItem {
@@ -354,7 +406,7 @@ export async function appList(
     headers: { Authorization: `Bearer ${sessionJwt}` },
     redirect: 'manual',
   });
-  return jsonOrThrow<{ apps: AppListItem[] }>(res);
+  return jsonOrThrow<{ apps: AppListItem[] }>(res, { method: 'GET', path: '/apps' });
 }
 
 export async function appDisable(
@@ -368,7 +420,10 @@ export async function appDisable(
     headers: { Authorization: `Bearer ${sessionJwt}` },
     redirect: 'manual',
   });
-  return jsonOrThrow<{ app_id: string; status: string }>(res);
+  return jsonOrThrow<{ app_id: string; status: string }>(res, {
+    method: 'DELETE',
+    path: '/apps/:appId',
+  });
 }
 
 export interface AuditEntry {
@@ -402,7 +457,10 @@ export async function auditQuery(
     headers: { Authorization: `Bearer ${sessionJwt}` },
     redirect: 'manual',
   });
-  return jsonOrThrow<{ entries: AuditEntry[]; next_cursor?: string }>(res);
+  return jsonOrThrow<{ entries: AuditEntry[]; next_cursor?: string }>(res, {
+    method: 'GET',
+    path: '/audit',
+  });
 }
 
 // ── Schema endpoints (contract §3.4-§3.6) ─────────────────────────
@@ -445,7 +503,10 @@ export async function schemaPush(
     body: JSON.stringify(body),
     redirect: 'manual',
   });
-  return jsonOrThrow<SchemaPushResponse>(res);
+  return jsonOrThrow<SchemaPushResponse>(res, {
+    method: 'POST',
+    path: '/apps/:appId/schema',
+  });
 }
 
 export interface SchemaCurrentResponse {
@@ -476,7 +537,10 @@ export async function schemaCurrent(
       redirect: 'manual',
     },
   );
-  return jsonOrThrow<SchemaCurrentResponse>(res);
+  return jsonOrThrow<SchemaCurrentResponse>(res, {
+    method: 'GET',
+    path: '/apps/:appId/schema/current',
+  });
 }
 
 export interface SchemaListItem {
@@ -513,7 +577,10 @@ export async function schemaList(
     headers: { Authorization: `Bearer ${sessionJwt}` },
     redirect: 'manual',
   });
-  return jsonOrThrow<SchemaListResponse>(res);
+  return jsonOrThrow<SchemaListResponse>(res, {
+    method: 'GET',
+    path: '/apps/:appId/schema',
+  });
 }
 
 export async function schemaApprove(
@@ -535,7 +602,10 @@ export async function schemaApprove(
       redirect: 'manual',
     },
   );
-  return jsonOrThrow<{ status: 'approved'; version: number; roles_migrated: number }>(res);
+  return jsonOrThrow<{ status: 'approved'; version: number; roles_migrated: number }>(res, {
+    method: 'POST',
+    path: '/apps/:appId/schema/approve-migration',
+  });
 }
 
 export { normaliseBaseUrl };

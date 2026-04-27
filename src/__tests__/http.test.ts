@@ -124,16 +124,25 @@ describe('discover', () => {
   });
 
   // ── redirect defence ────────────────────────────────────────
-  it('refuses to follow a 3xx from /discover', async () => {
+  it('refuses to follow a 3xx from /discover and names the path + remediation', async () => {
     // Cross-origin redirect to attacker: fetch with redirect:manual
-    // returns the redirect status directly, we must refuse.
+    // returns the redirect status directly, we must refuse. The
+    // error message must name the path (so the operator knows what
+    // to add to their CF Access exempt list) and the Location (so
+    // they can confirm whether it's CF Access or something else).
     setFetchImpl(async () =>
       new Response(null, {
         status: 302,
-        headers: { Location: 'https://attacker.example/discover' },
+        headers: { Location: 'https://idp.cloudflareaccess.com/login?kid=abc' },
       }),
     );
-    await expect(discover('https://pylon.acme')).rejects.toThrow(/redirect/i);
+    await expect(discover('https://pylon.acme')).rejects.toSatisfy(
+      (err: unknown) =>
+        err instanceof DiscoveryError &&
+        /GET \/discover/.test(err.message) &&
+        /CF Access exempt list/.test(err.message) &&
+        /idp\.cloudflareaccess\.com/.test(err.message),
+    );
   });
 
   // ── URL validation ──────────────────────────────────────────
@@ -234,7 +243,13 @@ describe('devicePoll', () => {
         err instanceof PylonHttpError &&
         err.status === 302 &&
         /gateway intercept/i.test(err.message) &&
-        /Cloudflare Access/.test(err.message),
+        // Names the exact endpoint that 302'd, so the operator can
+        // go fix their CF Access exempt list precisely.
+        /GET \/device\/poll/.test(err.message) &&
+        // Names CF Access (canonical term in pylon docs).
+        /CF Access/.test(err.message) &&
+        // Surfaces the canonical exempt list as remediation.
+        /\/device\/init/.test(err.message),
     );
   });
 
@@ -253,7 +268,33 @@ describe('devicePoll', () => {
         err instanceof PylonHttpError &&
         err.status === 200 &&
         /non-JSON response/i.test(err.message) &&
+        /GET \/device\/poll/.test(err.message) &&
         /Cloudflare Access/.test(err.message),
+    );
+  });
+
+  it('different-tier remediation for non-public paths', async () => {
+    // /whoami is auth'd by Bearer JWT, not CF Access. If it 302's,
+    // the operator's CF Access policy is over-broad — different fix
+    // than the public-path case. The error message must reflect
+    // that distinction so they don't naively add /whoami to the
+    // exempt list (which would defeat the auth model).
+    setFetchImpl(
+      async () =>
+        new Response(null, {
+          status: 302,
+          headers: { location: 'https://idp.cloudflareaccess.com/login?kid=abc' },
+        }),
+    );
+    await expect(whoami('https://pylon.acme', 'jwt-x')).rejects.toSatisfy(
+      (err: unknown) =>
+        err instanceof PylonHttpError &&
+        err.status === 302 &&
+        /GET \/whoami/.test(err.message) &&
+        // Names the right remediation: narrow the policy, not
+        // exempt-list it.
+        /Bearer session JWT/.test(err.message) &&
+        /narrow the CF Access policy/.test(err.message),
     );
   });
 });
