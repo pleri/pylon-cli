@@ -12,6 +12,90 @@ workflow fires on tag push and ships to npm with provenance.
 
 (no unreleased changes)
 
+## [0.3.1] — 2026-04-28
+
+Diagnostic + documentation release. **No behavioural changes to any
+command.** Exists so operators hitting a Cloudflare Access
+misconfiguration get an actionable error instead of a generic "Pylon
+returned 302" message, and have a single canonical doc to configure
+CF Access against.
+
+> **Important — does not "fix" CF Access by itself.** If your `pylon
+> login` is failing with a 302 to `*.cloudflareaccess.com`, that is a
+> server-side CF Access policy issue, not a CLI bug. This release
+> tells you _which_ endpoint is misconfigured and points at
+> [`docs/ROUTES.md`](./docs/ROUTES.md) for what to change. The
+> required CF Access policy update is operator action, not a CLI
+> upgrade.
+
+Operator docs: [`docs/ROUTES.md`](./docs/ROUTES.md) (new) ·
+[`README.md`](./README.md) (architecture primer + Mermaid diagrams)
+
+### Added
+
+- **[`docs/ROUTES.md`](./docs/ROUTES.md)** — per-endpoint route-class
+  matrix and the canonical CF Access configuration recipe. Three
+  classes:
+  - **A. Public** — `/discover`, `/device/init`, `/device/poll`,
+    `/.well-known/pylon-keys`, `/health`, `/ready`. No credential at
+    all.
+  - **B. Pylon-authenticated** — `/whoami`, `/apps/*`, `/roles/*`,
+    `/audit`, `/apps/*/schema*`, `/token`. `Authorization: Bearer
+    <session_jwt>` or `X-Pylon-App-Token`, validated by Pylon
+    internally.
+  - **C. Browser-gated** — `/device`, `/device/complete`, `/login`,
+    `/bootstrap`. `Cf-Access-Jwt-Assertion` from CF Access SSO.
+
+  Recommended setup: bind the CF Access application's include-paths
+  list to **only** the four class C paths. Everything else stays
+  open at the edge — Pylon's own JWT validation gates the API. This
+  shape removes the per-endpoint exempt-list maintenance burden and
+  matches how the system actually works (CF Access only ever needed
+  to authenticate the human-in-a-browser path).
+
+- **Architecture primer in [`README.md`](./README.md)** with four
+  Mermaid diagrams: top-level deployment topology, three-credential
+  lifecycle, per-request hot path, schema lifecycle. Quick start
+  expanded from 3 to 6 steps covering the full admin/author arc.
+
+### Changed
+
+- **Gateway-intercept errors now name the exact endpoint that 302'd
+  and the route class.** Before: a generic _"a Pylon endpoint that
+  should be public was intercepted (e.g. /device/init,
+  /device/poll)"_ regardless of which request actually failed. Now:
+
+  ```
+  gateway intercept on GET /whoami → HTTP 302 (Location: ...).
+  /whoami is route class B (Pylon-authenticated) and must be exempt
+  from CF Access at the edge. See <docs/ROUTES.md> for the full
+  route matrix and CF Access configuration recipes.
+  ```
+
+  Same shape for `discover()` redirect refusal and non-JSON 200
+  responses (gateways that swallow the request and return an HTML
+  login page with status 200). `jsonOrThrow()` now threads a
+  `RequestContext { method, path }` through every HTTP wrapper; path
+  templates use `:param` placeholders so the message matches CF
+  Access glob-pattern rules.
+
+  No exit codes changed; `PylonHttpError` still uses exit 6.
+
+### Migration
+
+None. Drop-in upgrade from 0.3.0; no command flags, exit codes, or
+HTTP shapes changed.
+
+### Required operator action (separate from this release)
+
+If you were already hitting `Pylon returned 302` errors on 0.3.0,
+this release alone will not let you log in. You must also update
+your CF Access policy per [`docs/ROUTES.md`](./docs/ROUTES.md) — the
+recommended setup is to narrow the CF Access application's
+include-paths to only `/device`, `/device/complete`, `/login`, and
+`/bootstrap`. The error message in 0.3.1 will name the specific
+class A or class B path that's currently being intercepted.
+
 ## [0.3.0] — 2026-04-25
 
 This is a behavioral-change release. **Existing CI invocations of

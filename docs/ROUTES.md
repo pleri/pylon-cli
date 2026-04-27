@@ -86,45 +86,55 @@ about to complete) SSO. There's no Bearer header to use.
 
 ## Recommended CF Access configuration
 
-Two equivalent shapes; pick whichever fits your CF Access UI workflow.
-
-### Pattern 1 — explicit exempt list (most common)
-
-Cover `<org-url>/*` with your normal "members of @yourcompany.com"
-policy, and add these exempt paths:
+**Protect only the browser pages.** CF Access covers the four class C
+paths and stays out of the way of everything else. Pylon's own
+Bearer-JWT and app-token validation gates the API.
 
 ```
-/.well-known/*
-/health
-/ready
-/discover
-/device/init
-/device/poll
-/whoami
-/apps/*
-/roles/*
-/audit
-/audit/*
-/token
+CF Access application:    <org-url>
+Include paths:            /device, /device/complete, /login, /bootstrap
+Policy:                   "Allow members of @yourcompany.com"
+                          (or whatever identity rule fits your org)
+
+Everything else:          no CF Access policy at all
 ```
 
-Note the wildcards on `/apps/*` and `/roles/*` — CF Access exempt
-rules use glob matching, not prefix matching, so a literal `/apps`
-won't cover `/apps/olam/schema`.
+That's the whole configuration. No per-endpoint exempt list to
+maintain, no globs to get wrong, no surprise 302s when a new class B
+path ships.
 
-### Pattern 2 — protect only browser pages (cleaner, fewer surprises)
+Why this is the right shape: CF Access at the edge can only
+authenticate via SSO cookies, service tokens, or `Cf-Access-Jwt-
+Assertion`. None of those are what the CLI or SDKs send. They send
+`Authorization: Bearer <session_jwt>` or `X-Pylon-App-Token`, and
+those are validated by Pylon inside the Worker — signature, issuer,
+audience, expiry, capability claims, all of it. CF Access in front
+of those endpoints adds nothing and breaks everything.
 
-Cover only the browser surface with CF Access; leave everything else
-unprotected at the edge. Pylon's own auth gates the API.
+The four class C paths are different — they render HTML for a real
+human in a browser who has just completed (or is about to complete)
+SSO. CF Access is the right authority for them.
 
-```
-Protect: /device, /device/complete, /login, /bootstrap
-Everything else: no CF Access policy
-```
+### Why not "exempt list everything except the browser pages"?
 
-This shape matches how the system actually works: CF Access only
-ever needed to authenticate the human-in-a-browser path. The API
-surface was always going to authenticate itself with Pylon JWTs.
+You _can_ wrap `<org-url>/*` in a CF Access policy and add an exempt
+list covering every class A and class B path, but it's strictly
+worse than the recommended shape above:
+
+- Every new class B endpoint added to the Pylon service requires a
+  matching exempt-list update; forgetting one ships a regression.
+- Exempt rules use glob patterns, not prefix matching — a literal
+  `/apps` won't cover `/apps/olam/schema`. Easy to get wrong.
+- The mental model ("everything is gated, except these holes") is
+  inverted from how the system actually works ("API authenticates
+  itself, only browser pages need CF Access").
+
+If your compliance posture genuinely requires every external request
+to flow through CF Access — for example, you must log every ingress
+in the Cloudflare audit trail — that's a different requirement and
+worth filing as a feature request; the CLI does not currently support
+CF Access service tokens (`CF-Access-Client-Id` / `CF-Access-Client-
+Secret`) which would be the standard way to satisfy it.
 
 ## Why CF Access can't carry Pylon JWTs through
 
@@ -142,30 +152,23 @@ perspective, a Bearer header is just an unrelated header, so an
 unauthenticated request stays unauthenticated and gets redirected to
 SSO. That's the 302 the CLI sees.
 
-The CLI does not currently support CF Access service tokens (no flag
-to set `CF-Access-Client-Id` / `CF-Access-Client-Secret`). If you need
-to keep CF Access in front of API endpoints — for example, because
-your compliance posture requires every external request to flow
-through CF Access — that's a feature request worth filing; the
-current shape of the CLI assumes Pattern 1 or Pattern 2 above.
-
 ## Troubleshooting checklist
 
 1. Read the `gateway intercept on <METHOD> <PATH>` line in the error.
    That's the exact endpoint that 302'd.
-2. Find the path in the matrix above. If it's Class A or Class B,
-   it must be exempt from CF Access.
-3. Add the path to your CF Access exempt list (Zero Trust → Access →
-   Applications → your Pylon app → policy → exempt paths). Use the
-   exact path or a glob that covers it.
-4. Re-run the failing `pylon` command.
+2. Find the path in the matrix above. If it's class A or class B, CF
+   Access should not be in front of it. Reconfigure your CF Access
+   application so its include-paths list covers only the four class C
+   paths (see "Recommended CF Access configuration" above).
+3. Re-run the failing `pylon` command.
 
-If the same path still 302's after you've added it to the exempt list,
-the most common causes are:
+If the same path still 302's after you've narrowed the CF Access
+application, the most common causes are:
 
-- A typo in the exempt rule (CF Access uses globs, not prefixes —
-  `/apps` won't cover `/apps/olam/schema`; you need `/apps/*`).
-- A second, more permissive Access policy on the same hostname that
-  re-asserts protection. Check for overlapping applications.
-- A Workers Route that runs Pylon on a different hostname than the one
-  CF Access protects.
+- A second, more permissive CF Access application on the same
+  hostname re-asserting protection. Check for overlapping
+  applications in Zero Trust → Access → Applications.
+- A Workers Route that runs Pylon on a different hostname than the
+  one your CF Access application is bound to.
+- Edit not yet propagated. CF Access policy edits usually take effect
+  within seconds but can take a minute or two.

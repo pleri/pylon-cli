@@ -1,6 +1,6 @@
 {
   "name": "@pleri/pylon-cli",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "private": false,
   "description": "Pylon CLI — log in to your org's Pylon, manage apps and roles, query the audit log. The user-facing half of the @pleri/pylon RBAC service.",
   "keywords": [
